@@ -1825,8 +1825,7 @@ static const struct acpi_device_id applespi_acpi_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, applespi_acpi_match);
 
-static UNIVERSAL_DEV_PM_OPS(applespi_pm_ops, applespi_suspend,
-			    applespi_resume, NULL);
+static SIMPLE_DEV_PM_OPS(applespi_pm_ops, applespi_suspend, applespi_resume);
 
 static struct spi_driver applespi_driver = {
 	.driver		= {
