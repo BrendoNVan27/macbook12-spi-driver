@@ -79,6 +79,7 @@
 #define PACKET_TYPE_WRITE	0x40
 #define PACKET_DEV_KEYB		0x01
 #define PACKET_DEV_TPAD		0x02
+#define PACKET_DEV_INFO		0xd0
 
 #define MAX_ROLLOVER		6
 #define MAX_MODIFIERS		8
@@ -219,6 +220,17 @@ struct touchpad_protocol {
 };
 
 /**
+ * struct command_protocol_info - get keyboard/touchpad info.
+ * message.type = 0x1020, message.length = 0x0000
+ *
+ * @crc_16:		crc over the whole message struct (message header +
+ *			this struct) minus this @crc_16 field
+ */
+struct command_protocol_info {
+	__le16			crc_16;
+};
+
+/**
  * struct command_protocol_mt_init - initialize multitouch.
  * message.type = 0x0252, message.length = 0x0002
  *
@@ -294,6 +306,7 @@ struct message {
 	union {
 		struct keyboard_protocol	keyboard;
 		struct touchpad_protocol	touchpad;
+		struct command_protocol_info	info_command;
 		struct command_protocol_mt_init	init_mt_command;
 		struct command_protocol_capsl	capsl_command;
 		struct command_protocol_bl	bl_command;
@@ -393,6 +406,7 @@ struct applespi_data {
 	struct spi_transfer		st_t;
 	struct spi_message		wr_m;
 
+	bool				want_info_cmd;
 	bool				want_mt_init_cmd;
 	bool				want_cl_led_on;
 	bool				have_cl_led_on;
@@ -895,6 +909,20 @@ static int applespi_send_cmd_msg(struct applespi_data *applespi)
 	memset(packet, 0, APPLESPI_PACKET_SIZE);
 
 	/* are we processing init commands? */
+	if (applespi->want_info_cmd) {
+		applespi->want_info_cmd = false;
+		applespi->want_mt_init_cmd = true;
+		applespi->cmd_log_mask = DBG_CMD_TP_INI;
+
+		/* build init command */
+		device = PACKET_DEV_INFO;
+
+		message->type = cpu_to_le16(0x1020);
+		msg_len = sizeof(message->info_command);
+
+		message->zero = 0x02;
+		message->rsp_buf_len = cpu_to_le16(0x0200);
+
 	} else if (applespi->want_mt_init_cmd) {
 		applespi->want_mt_init_cmd = false;
 		applespi->cmd_log_mask = DBG_CMD_TP_INI;
@@ -954,7 +982,8 @@ static int applespi_send_cmd_msg(struct applespi_data *applespi)
 	message->counter = applespi->cmd_msg_cntr++ & 0xff;
 
 	message->length = cpu_to_le16(msg_len - 2);
-	message->rsp_buf_len = message->length;
+	if (!message->rsp_buf_len)
+		message->rsp_buf_len = message->length;
 
 	crc = crc16(0, (u8 *)message, le16_to_cpu(packet->length) - 2);
 	*((__le16 *)&message->data[msg_len - 2]) = cpu_to_le16(crc);
@@ -982,7 +1011,7 @@ static void applespi_init(struct applespi_data *applespi)
 
 	spin_lock_irqsave(&applespi->cmd_msg_lock, flags);
 
-	applespi->want_mt_init_cmd = true;
+	applespi->want_info_cmd = true;
 	applespi_send_cmd_msg(applespi);
 
 	spin_unlock_irqrestore(&applespi->cmd_msg_lock, flags);
@@ -1268,7 +1297,14 @@ static void applespi_handle_cmd_response(struct applespi_data *applespi,
 					 struct spi_packet *packet,
 					 struct message *message)
 {
-	if (le16_to_cpu(message->length) != 0x0000) {
+	if (packet->device == PACKET_DEV_INFO &&
+	    le16_to_cpu(message->type) == 0x1020)
+		print_hex_dump(KERN_DEBUG, pr_fmt("info "), DUMP_PREFIX_NONE,
+			       32, 1, applespi->rx_buffer, APPLESPI_PACKET_SIZE,
+			       false);
+
+	if (le16_to_cpu(message->length) != 0x0000 &&
+	    le16_to_cpu(message->type) != 0x1020) {
 		dev_warn_ratelimited(&applespi->spi->dev,
 				     "Received unexpected write response: length=%x\n",
 				     le16_to_cpu(message->length));
