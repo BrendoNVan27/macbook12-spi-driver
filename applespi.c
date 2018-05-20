@@ -1,10 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * MacBook (Pro) SPI keyboard and touchpad driver
  *
  * Copyright (c) 2015-2018 Federico Lorenzi
  * Copyright (c) 2017-2018 Ronald Tschalär
- *
- * SPDX-License-Identifier: GPL-2.0
  */
 
 /**
@@ -1269,22 +1268,19 @@ static void applespi_handle_keyboard_event(struct applespi_data *applespi,
 	for (i = 0; i < MAX_MODIFIERS; i++) {
 		u8 *modifiers = &keyboard_protocol->modifiers;
 
-		if (test_bit(i, (unsigned long *)modifiers)) {
+		if (test_bit(i, (unsigned long *)modifiers))
 			input_report_key(applespi->keyboard_input_dev,
 					 applespi_controlcodes[i], 1);
-		} else {
+		else
 			input_report_key(applespi->keyboard_input_dev,
 					 applespi_controlcodes[i], 0);
-		}
 	}
 
 	/* check function key */
-	if (keyboard_protocol->fn_pressed && !applespi->last_fn_pressed) {
+	if (keyboard_protocol->fn_pressed && !applespi->last_fn_pressed)
 		input_report_key(applespi->keyboard_input_dev, KEY_FN, 1);
-	} else if (!keyboard_protocol->fn_pressed &&
-		   applespi->last_fn_pressed) {
+	else if (!keyboard_protocol->fn_pressed && applespi->last_fn_pressed)
 		input_report_key(applespi->keyboard_input_dev, KEY_FN, 0);
-	}
 	applespi->last_fn_pressed = keyboard_protocol->fn_pressed;
 
 	/* done */
@@ -1338,19 +1334,15 @@ static void applespi_debug_print_read_packet(struct applespi_data *applespi,
 	unsigned int dbg_mask;
 
 	if (packet->flags == PACKET_TYPE_READ &&
-	    packet->device == PACKET_DEV_KEYB) {
+	    packet->device == PACKET_DEV_KEYB)
 		dbg_mask = DBG_RD_KEYB;
-
-	} else if (packet->flags == PACKET_TYPE_READ &&
-		   packet->device == PACKET_DEV_TPAD) {
+	else if (packet->flags == PACKET_TYPE_READ &&
+		 packet->device == PACKET_DEV_TPAD)
 		dbg_mask = DBG_RD_TPAD;
-
-	} else if (packet->flags == PACKET_TYPE_WRITE) {
+	else if (packet->flags == PACKET_TYPE_WRITE)
 		dbg_mask = applespi->cmd_log_mask;
-
-	} else {
+	else
 		dbg_mask = DBG_RD_UNKN;
-	}
 
 	debug_print(dbg_mask, "--- %s ---------------------------\n",
 		    applespi_debug_facility(dbg_mask));
